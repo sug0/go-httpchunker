@@ -9,7 +9,7 @@ import (
     "net/http"
     "io/ioutil"
 
-    "httpchunker"
+    "github.com/sug0/go-httpchunker"
 )
 
 type reqProvider struct{}
