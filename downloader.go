@@ -87,7 +87,6 @@ func (d *Downloader) Download(workers int, chunks Provider, destPath, filePrefix
     sem := make(chan struct{}, workers)
     dlErrors := make(chan error, workers)
     ticker := time.NewTicker(collect)
-    defer ticker.Stop()
 
     for part := 1;; part++ {
         select {
@@ -97,6 +96,7 @@ func (d *Downloader) Download(workers int, chunks Provider, destPath, filePrefix
             errs = append(errs, err)
         case chk, ok := <-requests:
             if !ok {
+                ticker.Stop()
                 wg.Wait()
                 return errs
             }
