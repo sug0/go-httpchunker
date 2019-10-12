@@ -6,10 +6,8 @@ import (
     "log"
     "fmt"
     "sync"
-    "time"
     "bytes"
     "errors"
-    "runtime"
     "net/http"
     "path/filepath"
 )
@@ -63,8 +61,6 @@ func (d *Downloader) log(format string, args ...interface{}) {
 
 // Perform the actual download.
 func (d *Downloader) Download(workers int, chunks Provider, destPath, filePrefix string) []error {
-    const collect = 5 * time.Second
-
     var errs []error
 
     if workers < 1 || workers > MaxConns {
@@ -86,17 +82,13 @@ func (d *Downloader) Download(workers int, chunks Provider, destPath, filePrefix
     wg := sync.WaitGroup{}
     sem := make(chan struct{}, workers)
     dlErrors := make(chan error, workers)
-    ticker := time.NewTicker(collect)
 
     for part := 1;; part++ {
         select {
-        case <-ticker.C:
-            runtime.GC()
         case err := <-dlErrors:
             errs = append(errs, err)
         case chk, ok := <-requests:
             if !ok {
-                ticker.Stop()
                 wg.Wait()
                 return errs
             }
