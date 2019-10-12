@@ -101,10 +101,10 @@ func (d *Downloader) Download(workers int, chunks Provider, destPath, filePrefix
                 return errs
             }
             if chk.Err != nil {
-                go func() {
-                    err := fmt.Errorf("httpchunker: download failed: %w", chk.Err)
+                go func(err error) {
+                    err = fmt.Errorf("httpchunker: download failed: %w", err)
                     dlErrors <- err
-                }()
+                }(chk.Err)
                 continue
             }
             wg.Add(1)
