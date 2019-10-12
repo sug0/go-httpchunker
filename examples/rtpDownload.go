@@ -74,8 +74,7 @@ func (reqProvider) ChunkStream() (<-chan httpchunker.Chunk, error) {
             }
             if chunk[0] != '#' {
                 url := fmt.Sprintf("%s/%s", vPrefix, chunk)
-                req, err := http.NewRequest("GET", url, nil)
-                ch <- httpchunker.Chunk{req, err}
+                ch <- httpchunker.NewChunk("GET", url, nil)
             }
             p = p[len(chunk)+1:]
         }
