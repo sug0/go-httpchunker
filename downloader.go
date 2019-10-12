@@ -25,7 +25,8 @@ var (
     client  http.Client
 )
 
-const maxConns = 1024
+// Max number of connections kept alive by an httpchunker.Downloader.
+const MaxConns = 1024
 
 func init() {
     bufPool.New = func() interface{} {
@@ -36,17 +37,20 @@ func init() {
     }
 }
 
+// Creates a new httpchunker.Downloader and returns it.
 func NewDownloader() *Downloader {
     return &Downloader{
         client: http.Client{
             Transport: &http.Transport{
-                MaxIdleConnsPerHost: maxConns,
+                MaxIdleConnsPerHost: MaxConns,
                 TLSHandshakeTimeout: 0,
             },
         },
     }
 }
 
+// Sets the logger used by httpchunker.Downloader. It can be nil,
+// to disable all logging.
 func (d *Downloader) WithLogger(logger *log.Logger) {
     d.logger = logger
 }
@@ -57,12 +61,13 @@ func (d *Downloader) log(format string, args ...interface{}) {
     }
 }
 
+// Perform the actual download.
 func (d *Downloader) Download(workers int, chunks Provider, destPath, filePrefix string) []error {
     const collect = 5 * time.Second
 
     var errs []error
 
-    if workers < 1 || workers > maxConns {
+    if workers < 1 || workers > MaxConns {
         return append(errs, ErrInvalidWorkers)
     }
 
