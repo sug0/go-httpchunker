@@ -9,7 +9,6 @@ import (
     "bytes"
     "errors"
     "net/http"
-    "path/filepath"
 )
 
 type Downloader struct {
@@ -60,14 +59,14 @@ func (d *Downloader) log(format string, args ...interface{}) {
 }
 
 // Perform the actual download.
-func (d *Downloader) Download(workers int, chunks Provider, destPath, filePrefix string) []error {
+func (d *Downloader) Download(workers int, chunks Provider, pn Partnamer) []error {
     var errs []error
 
     if workers < 1 || workers > MaxConns {
         return append(errs, ErrInvalidWorkers)
     }
 
-    err := os.Mkdir(destPath, 0777)
+    err := os.Mkdir(pn.Destpath(), 0777)
     if err != nil && !errors.Is(err, os.ErrExist) {
         err = fmt.Errorf("httpchunker: failed to create dest dir: %w", err)
         return append(errs, err)
@@ -102,7 +101,7 @@ func (d *Downloader) Download(workers int, chunks Provider, destPath, filePrefix
             wg.Add(1)
             go func(part int) {
                 sem <- struct{}{}
-                err := d.downloadPart(part, chk.Request, destPath, filePrefix)
+                err := d.downloadPart(part, chk.Request, pn)
                 <-sem
                 wg.Done()
                 if err != nil {
@@ -113,26 +112,32 @@ func (d *Downloader) Download(workers int, chunks Provider, destPath, filePrefix
     }
 }
 
-func (d *Downloader) downloadPart(part int, req *http.Request, destPath, filePrefix string) error {
+func (d *Downloader) downloadPart(part int, req *http.Request, pn Partnamer) error {
     d.log("Downloading part %d\n", part)
 
     rsp, err := d.client.Do(req)
-    if err != nil {
+    switch {
+    case err != nil:
         return fmt.Errorf("httpchunker: download failed: %w", err)
+    case rsp.StatusCode != 200:
+        rsp.Body.Close()
+        return fmt.Errorf("httpchunker: %s: %w", rsp.Status, ErrHTTPStatus)
     }
     defer rsp.Body.Close()
 
     body, err := readBytes(rsp.Body)
     defer returnBuf(body)
 
-    if err != nil {
+    bodyBytes := body.Bytes()
+
+    switch {
+    case err != nil:
         return fmt.Errorf("httpchunker: transfer failed: %w", err)
+    case len(bodyBytes) == 0:
+        return fmt.Errorf("httpchunker: %s: %w", pn.Filename(part), ErrEmptyBody)
     }
 
-    err = writeFile(
-        filepath.Join(destPath, fmt.Sprintf("%s%d", filePrefix, part)),
-        body.Bytes(),
-    )
+    err = writeFile(PathOf(part, pn), bodyBytes)
 
     if err != nil {
         return fmt.Errorf("httpchunker: failed to save file: %w", err)

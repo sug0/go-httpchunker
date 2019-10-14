@@ -37,7 +37,7 @@ func main() {
     d := httpchunker.NewDownloader()
     d.WithLogger(log.New(os.Stderr, "rtpDownloader: ", log.LstdFlags))
 
-    errs := d.Download(vWorkers, reqProvider{}, vDestDir, "part_")
+    errs := d.Download(vWorkers, reqProvider{}, httpchunker.Filename{"part_", vDestDir})
     if errs != nil {
         panic(joinErrors(errs))
     }
