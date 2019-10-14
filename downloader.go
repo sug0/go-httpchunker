@@ -119,7 +119,7 @@ func (d *Downloader) downloadPart(part int, req *http.Request, pn Partnamer) err
     switch {
     case err != nil:
         return fmt.Errorf("httpchunker: download failed: %w", err)
-    case rsp.StatusCode != 200:
+    case (rsp.StatusCode/200) != 1:
         rsp.Body.Close()
         return fmt.Errorf("httpchunker: %s: %w", rsp.Status, ErrHTTPStatus)
     }
