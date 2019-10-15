@@ -27,7 +27,7 @@ func main() {
 func joinErrors(errs []error) error {
     err := errs[0]
     for i := 1; i < len(errs); i++ {
-        err = fmt.Errorf("«%w», followed by «%w»", errs[i], err)
+        err = fmt.Errorf("%s\n%s", err, errs[i])
     }
-    return err
+    return fmt.Errorf("%s\n", err)
 }
