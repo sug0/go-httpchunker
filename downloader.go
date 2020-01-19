@@ -88,13 +88,20 @@ func (d *Downloader) Download(workers int, chunks Provider, pn Partnamer) []erro
             errs = append(errs, err)
         case chk, ok := <-requests:
             if !ok {
+                // drain errors channel
+                close(dlErrors)
+                for err := range dlErrors {
+                    errs = append(errs, err)
+                }
                 wg.Wait()
                 return errs
             }
             if chk.Err != nil {
+                wg.Add(1)
                 go func(err error) {
                     err = fmt.Errorf("httpchunker: download failed: %w", err)
                     dlErrors <- err
+                    wg.Done()
                 }(chk.Err)
                 continue
             }
@@ -102,11 +109,11 @@ func (d *Downloader) Download(workers int, chunks Provider, pn Partnamer) []erro
             go func(part int) {
                 sem <- struct{}{}
                 err := d.downloadPart(part, chk.Request, pn)
-                <-sem
-                wg.Done()
                 if err != nil {
                     dlErrors <- err
                 }
+                <-sem
+                wg.Done()
             }(part)
         }
     }
