@@ -4,6 +4,7 @@ import (
     "fmt"
     "strconv"
     "net/http"
+    "crypto/tls"
 
     "github.com/sug0/go-httpchunker"
 )
@@ -13,8 +14,16 @@ type ChunkProvider struct {
     URL       string
 }
 
+var client = http.Client{
+    Transport: &http.Transport{
+        TLSClientConfig: &tls.Config{
+            InsecureSkipVerify: true,
+        },
+    },
+}
+
 func (p ChunkProvider) ChunkStream() (<-chan httpchunker.Chunk, error) {
-    rsp, err := http.Head(p.URL)
+    rsp, err := client.Head(p.URL)
     if err != nil {
         return nil, fmt.Errorf("byterange: HEAD failed: %w", err)
     }
