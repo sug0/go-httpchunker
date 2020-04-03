@@ -9,6 +9,7 @@ import (
     "bytes"
     "errors"
     "net/http"
+    "crypto/tls"
 )
 
 type Downloader struct {
@@ -19,7 +20,6 @@ type Downloader struct {
 var (
     bufPool sync.Pool
     cpPool  sync.Pool
-    client  http.Client
 )
 
 // Max number of connections kept alive by an httpchunker.Downloader.
@@ -41,6 +41,9 @@ func NewDownloader() *Downloader {
             Transport: &http.Transport{
                 MaxIdleConnsPerHost: MaxConns,
                 TLSHandshakeTimeout: 0,
+                TLSClientConfig: &tls.Config{
+                    InsecureSkipVerify: true,
+                },
             },
         },
     }
