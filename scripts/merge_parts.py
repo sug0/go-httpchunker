@@ -8,7 +8,7 @@ if __name__ == '__main__':
     inputdir = sys.argv[1]
     destfile = sys.argv[2]
     with open(destfile, 'wb') as dest:
-        for filename in os.listdir(inputdir):
+        for filename in sorted(os.listdir(inputdir)):
             filename = f'{inputdir}/{filename}'
             with open(filename, 'rb') as f:
                 dest.write(f.read())
