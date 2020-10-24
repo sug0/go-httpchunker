@@ -4,6 +4,7 @@ import (
     "io"
     "fmt"
     "time"
+    "sync"
     "bytes"
     "regexp"
     "net/http"
@@ -37,24 +38,30 @@ func (p ChunkProvider) ChunkStream() (<-chan httpchunker.Chunk, error) {
     }
     ch := make(chan httpchunker.Chunk, 24)
     go func() {
-        defer close(ch)
+        var wg sync.WaitGroup
         var buf bytes.Buffer
+        defer close(ch)
+        defer wg.Wait()
         for page := 1; ; page++ {
             comicPageUrl := fmt.Sprintf("%s/%d.html", p.BaseURL, page)
             rsp, err := client.Get(comicPageUrl)
             if err != nil || rsp.StatusCode != 200 {
                 return
             }
-            func() { // use a new function to close body
-                defer rsp.Body.Close()
-                buf.Reset()
-                io.Copy(&buf, rsp.Body)
+            wg.Add(1)
+            go func() {
+                defer wg.Done()
+                func() { // use a new function to close body
+                    defer rsp.Body.Close()
+                    buf.Reset()
+                    io.Copy(&buf, rsp.Body)
+                }()
+                imageUrl := parseUrl(buf.Bytes())
+                if imageUrl == nil {
+                    return
+                }
+                ch <- httpchunker.NewChunk("GET", string(imageUrl), nil)
             }()
-            imageUrl := parseUrl(buf.Bytes())
-            if imageUrl == nil {
-                return
-            }
-            ch <- httpchunker.NewChunk("GET", string(imageUrl), nil)
         }
     }()
     return ch, nil
