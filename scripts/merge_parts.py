@@ -13,4 +13,7 @@ if __name__ == '__main__':
             with open(filename, 'rb') as f:
                 dest.write(f.read())
             os.remove(filename)
-    os.rmdir(inputdir)
+    try:
+        os.rmdir(inputdir)
+    except OSError:
+        os.unlink(inputdir)
