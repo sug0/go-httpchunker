@@ -7,13 +7,15 @@ import (
     "sync"
     "bytes"
     "regexp"
+    "strconv"
     "net/http"
     "crypto/tls"
 
     "github.com/sug0/go-httpchunker"
 )
 
-var reg = regexp.MustCompile(`<img src="([^"]+)" style="margin:0 auto;" id="image" />`)
+var urlReg = regexp.MustCompile(`<img src="([^"]+)" style="margin:0 auto;" id="image" />`)
+var limReg = regexp.MustCompile(`<option value="[^"]+">(\w+)</option>`)
 
 var client = http.Client{
     Transport: &http.Transport{
@@ -23,6 +25,10 @@ var client = http.Client{
             InsecureSkipVerify: true,
         },
     },
+}
+
+var bufPool = sync.Pool{
+    New: func() interface{} { return new(bytes.Buffer) },
 }
 
 type ChunkProvider struct {
@@ -39,32 +45,77 @@ func (p ChunkProvider) ChunkStream() (<-chan httpchunker.Chunk, error) {
     ch := make(chan httpchunker.Chunk, 24)
     go func() {
         var wg sync.WaitGroup
-        var buf bytes.Buffer
+
         defer close(ch)
         defer wg.Wait()
-        for page := 1; ; page++ {
-            comicPageUrl := fmt.Sprintf("%s/%d.html", p.BaseURL, page)
-            rsp, err := client.Get(comicPageUrl)
-            if err != nil || rsp.StatusCode != 200 {
-                return
+
+        buf := p.fetchPage(1)
+        if buf == nil {
+            return
+        }
+        limit, ok := parseLimit(buf)
+        if !ok {
+            return
+        }
+        wg.Add(limit)
+
+        go func(buf *bytes.Buffer) {
+            defer wg.Done()
+            imageUrl, ok := parsePageUrl(buf)
+            if ok {
+                ch <- httpchunker.NewChunk("GET", imageUrl, nil)
             }
-            wg.Add(1)
-            go func() {
+        }(buf)
+
+        for page := 2; page <= limit; page++ {
+            go func(page int) {
                 defer wg.Done()
-                func() { // use a new function to close body
-                    defer rsp.Body.Close()
-                    buf.Reset()
-                    io.Copy(&buf, rsp.Body)
-                }()
-                imageUrl := parseUrl(buf.Bytes())
-                if imageUrl == nil {
+                buf := p.fetchPage(page)
+                if buf == nil {
                     return
                 }
-                ch <- httpchunker.NewChunk("GET", string(imageUrl), nil)
-            }()
+                imageUrl, ok := parsePageUrl(buf)
+                if !ok {
+                    return
+                }
+                ch <- httpchunker.NewChunk("GET", imageUrl, nil)
+            }(page)
         }
     }()
     return ch, nil
+}
+
+func (p ChunkProvider) fetchPage(page int) *bytes.Buffer {
+    buf := getBuffer()
+    comicPageUrl := fmt.Sprintf("%s/%d.html", p.BaseURL, page)
+    rsp, err := client.Get(comicPageUrl)
+    if err != nil || rsp.StatusCode != 200 {
+        return nil
+    }
+    defer rsp.Body.Close()
+    _, err = io.Copy(buf, rsp.Body)
+    if err != nil {
+        return nil
+    }
+    return buf
+}
+
+func parsePageUrl(buf *bytes.Buffer) (string, bool) {
+    defer returnBuffer(buf)
+    imageUrl := parseUrl(buf.Bytes())
+    if imageUrl == nil {
+        return "", false
+    }
+    return string(imageUrl), true
+}
+
+func getBuffer() *bytes.Buffer {
+    return bufPool.Get().(*bytes.Buffer)
+}
+
+func returnBuffer(buf *bytes.Buffer) {
+    buf.Reset()
+    bufPool.Put(buf)
 }
 
 func parseUrl(p []byte) []byte {
@@ -73,12 +124,24 @@ func parseUrl(p []byte) []byte {
         if line == nil {
             return nil
         }
-        sub := reg.FindSubmatch(line)
+        sub := urlReg.FindSubmatch(line)
         if sub != nil {
             return append([]byte("https:"), sub[1]...)
         }
         p = p[len(line)+1:]
     }
+}
+
+func parseLimit(buf *bytes.Buffer) (int, bool) {
+    matches := limReg.FindAllSubmatch(buf.Bytes(), -1)
+    if matches == nil {
+        return 0, false
+    }
+    l, err := strconv.ParseUint(string(matches[len(matches)-1][1]), 10, 32)
+    if err != nil {
+        return 0, false
+    }
+    return int(l), true
 }
 
 func lineGet(p []byte) []byte {
