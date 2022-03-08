@@ -18,7 +18,10 @@ func main() {
     d := httpchunker.NewDownloader()
     d.WithLogger(log.New(os.Stderr, os.Args[0]+": ", log.LstdFlags))
 
-    errs := d.Download(24, p, httpchunker.Filename{"part_", "out"})
+    errs := d.Download(24, p, httpchunker.Filename{
+        Prefix: "part_",
+        Dest: "out",
+    })
     if errs != nil {
         panic(joinErrors(errs))
     }

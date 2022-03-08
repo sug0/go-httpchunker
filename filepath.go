@@ -8,6 +8,7 @@ import (
 // A simple Partnamer implementation.
 type Filename struct {
     Prefix string
+    Suffix string
     Dest   string
 }
 
@@ -31,5 +32,5 @@ func (fn Filename) Destpath() string {
 
 // Implements Partnamer.
 func (fn Filename) Filename(part int) string {
-    return fmt.Sprintf("%s%08d", fn.Prefix, part)
+    return fmt.Sprintf("%s%08d%s", fn.Prefix, part, fn.Suffix)
 }
